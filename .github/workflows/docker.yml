@@ -29,3 +29,7 @@ jobs:
           context: .
           push: true
           tags: matheussaleh/nest-api:latest
+
+      - name: Deploy no Render
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
