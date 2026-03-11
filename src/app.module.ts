@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtGuard } from './modules/auth/guards/jwt.guard';
+import { WalletModule } from './modules/wallet/wallet.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { JwtGuard } from './modules/auth/guards/jwt.guard';
       isGlobal: true,
     }),
     AuthModule,
+    WalletModule
   ],
   controllers: [AppController],
   providers: [AppService, {

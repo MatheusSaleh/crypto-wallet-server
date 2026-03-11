@@ -11,19 +11,19 @@ export class AuthController {
 
     @Public()
     @Post('register')
-    register(@Body() data: RegisterDto) {
+    public register(@Body() data: RegisterDto) {
         return this.authService.register(data);
     }
 
     @Public()
     @Post('login')
-    login(@Body() data: LoginDto) {
+    public login(@Body() data: LoginDto) {
         return this.authService.login(data);
     }
 
     @Public()
     @Post('refresh')
-    refresh(@Body('refreshToken') refreshToken: string) {
+    public refresh(@Body('refreshToken') refreshToken: string) {
         return this.authService.refresh(refreshToken);
     }
 }
