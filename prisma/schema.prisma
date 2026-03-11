@@ -44,3 +44,9 @@ model LedgerEntry {
   createdAt       DateTime @default(now())
   wallet          Wallet   @relation(fields: [walletId], references: [id])
 }
+
+model WebhookEvent {
+  id             String   @id @default(uuid())
+  idempotencyKey String   @unique
+  createdAt      DateTime @default(now())
+}

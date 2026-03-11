@@ -6,6 +6,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtGuard } from './modules/auth/guards/jwt.guard';
 import { WalletModule } from './modules/wallet/wallet.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -14,7 +15,8 @@ import { WalletModule } from './modules/wallet/wallet.module';
       isGlobal: true,
     }),
     AuthModule,
-    WalletModule
+    WalletModule,
+    WebhooksModule
   ],
   controllers: [AppController],
   providers: [AppService, {
