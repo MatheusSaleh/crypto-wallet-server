@@ -34,34 +34,59 @@ export class AuthService {
       },
     });
 
-    return {
-      id: user.id,
-      email: user.email,
-    };
+    const tokens = await this.generateToken(user.id);
+
+    return tokens;
   }
 
   async login(data: LoginDto) {
 
     const user = await this.prisma.user.findUnique({
-        where: { email: data.email }
-    })
+      where: { email: data.email },
+    });
 
     if (!user) {
-        throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais inválidas');
     }
 
     const passwordMatch = await bcrypt.compare(data.password, user.password);
 
-    if (!passwordMatch){
-        throw new UnauthorizedException('Credenciais inválidas');
+    if (!passwordMatch) {
+      throw new UnauthorizedException('Credenciais inválidas');
     }
 
-    const payload = { sub: user.id }
+    const tokens = await this.generateToken(user.id);
 
-    const accessToken = this.jwtService.sign(payload)
+    return tokens;
+  }
+
+  private async generateToken(userId: string) {
+    const payload = { sub: userId };
+
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.JWT_SECRET,
+      expiresIn: '15m',
+    });
+
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.JWT_SECRET,
+      expiresIn: '7d',
+    });
 
     return {
-        accessToken
+      accessToken,
+      refreshToken,
+    }
+  }
+
+  async refresh(token: string) {
+    try {
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: process.env.JWT_SECRET,
+      });
+      return await this.generateToken(payload.sub); 
+    } catch (e) {
+      throw new UnauthorizedException('Token inválido');
     }
   }
 }

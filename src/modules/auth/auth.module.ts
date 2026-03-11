@@ -7,12 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 @Module({
   imports: [
     PrismaModule,
-    JwtModule.register({
-      secret: 'supersecret',
-      signOptions: {
-        expiresIn: '1h',
-      }
-    })
+    JwtModule.register({})
   ],
   providers: [AuthService],
   controllers: [AuthController]
