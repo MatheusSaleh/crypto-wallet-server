@@ -9,6 +9,8 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { SwapModule } from './modules/swap/swap.module';
 import { WithdrawModule } from './modules/withdraw/withdraw.module';
+import { LedgerModule } from './modules/ledger/ledger.module';
+import { TransactionsModule } from './modules/transactions/transactions.module';
 
 @Module({
   imports: [
@@ -20,7 +22,9 @@ import { WithdrawModule } from './modules/withdraw/withdraw.module';
     WalletModule,
     WebhooksModule,
     SwapModule,
-    WithdrawModule
+    WithdrawModule,
+    LedgerModule,
+    TransactionsModule
   ],
   controllers: [AppController],
   providers: [AppService, {
