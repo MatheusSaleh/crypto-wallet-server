@@ -8,6 +8,7 @@ import { JwtGuard } from './modules/auth/guards/jwt.guard';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { SwapModule } from './modules/swap/swap.module';
+import { WithdrawModule } from './modules/withdraw/withdraw.module';
 
 @Module({
   imports: [
@@ -18,7 +19,8 @@ import { SwapModule } from './modules/swap/swap.module';
     AuthModule,
     WalletModule,
     WebhooksModule,
-    SwapModule
+    SwapModule,
+    WithdrawModule
   ],
   controllers: [AppController],
   providers: [AppService, {

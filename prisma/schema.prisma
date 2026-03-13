@@ -50,3 +50,14 @@ model WebhookEvent {
   idempotencyKey String   @unique
   createdAt      DateTime @default(now())
 }
+
+model Transaction {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  fromToken String?
+  toToken   String?
+  amount    Float
+  fee       Float?
+  createdAt DateTime @default(now())
+}
