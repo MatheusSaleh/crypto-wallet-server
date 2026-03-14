@@ -26,12 +26,13 @@ O objetivo do projeto é simular a **infraestrutura básica de um sistema financ
 - **Docker** → Esta API Executa por meio de uma imagem docker, facilitando o processo de deploy
 - **Render** → Plataforma para Deploy da API
 - **Github Actions** → Ferramenta de CI/CD utilizada para automatizar o processo de deploy
+- **Swagger** → Conjunto de ferramentas que permite documentar e consumir APIs RESTful, facilitando a visualização interativa da API
 ---
 # Como rodar o projeto
 
 ### Foi realizado o deploy desta API através do Render sob a seguinte URL: 
 
-https://nest-api-r1fz.onrender.com
+https://nest-api-r1fz.onrender.com/docs
 
 # Como rodar o projeto localmente
 

@@ -1,10 +1,23 @@
+import { ApiProperty } from "@nestjs/swagger"
+
 export class TransactionResponseDto {
 
+    @ApiProperty()
     type: string 
-    fromToken?: string 
+
+    @ApiProperty()
+    fromToken?: string
+    
+    @ApiProperty()
     toToken?: string 
+
+    @ApiProperty()
     amount: number
+
+    @ApiProperty()
     fee?: number
+
+    @ApiProperty()
     createdAt: Date
 
     constructor(

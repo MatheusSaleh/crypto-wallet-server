@@ -1,10 +1,23 @@
+import { ApiProperty } from "@nestjs/swagger";
+
 export class LedgerResponseDto {
 
+    @ApiProperty()
     type: string;
+
+    @ApiProperty()
     token: string; 
+
+    @ApiProperty()
     amount: number;
+
+    @ApiProperty()
     previousBalance: number;
+
+    @ApiProperty()
     newBalance: number;
+
+    @ApiProperty()
     createdAt: Date
     
     constructor(

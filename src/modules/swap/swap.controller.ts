@@ -3,8 +3,10 @@ import { SwapQuoteDto } from './dto/swap-quote.dto';
 import { SwapService } from './swap.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SwapExecuteDto } from './dto/swap-execute.dto';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 @Controller('swap')
+@ApiTags('swap')
 export class SwapController {
 
     constructor(private swapService: SwapService) {
@@ -12,11 +14,13 @@ export class SwapController {
     }
 
     @Get('quote')
+    @ApiOperation({ summary: 'Obter Cotação'})
     quote(@Query() query: SwapQuoteDto) {
         return this.swapService.getQuote(query);
     }
 
     @Post()
+    @ApiOperation({ summary: 'Realizar Operação de Swap'})
     execute(
         @CurrentUser() user,
         @Body() data: SwapExecuteDto
