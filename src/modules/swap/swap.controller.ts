@@ -3,10 +3,11 @@ import { SwapQuoteDto } from './dto/swap-quote.dto';
 import { SwapService } from './swap.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SwapExecuteDto } from './dto/swap-execute.dto';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 @Controller('swap')
 @ApiTags('swap')
+@ApiBearerAuth('access-token')
 export class SwapController {
 
     constructor(private swapService: SwapService) {

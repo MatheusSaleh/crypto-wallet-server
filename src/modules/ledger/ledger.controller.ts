@@ -2,10 +2,11 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { LedgerService } from './ledger.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 @Controller('ledger')
 @ApiTags('ledger')
+@ApiBearerAuth('access-token')
 export class LedgerController {
 
     constructor(private ledgerService: LedgerService){}

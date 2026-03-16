@@ -10,8 +10,15 @@ async function bootstrap() {
     .setTitle('Crypto Wallet API')
     .setDescription('Documentação da API')
     .setVersion('1.0')
-    .addBearerAuth()
-    .build()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+      'access-token',
+    )
+    .build();
 
   const document = SwaggerModule.createDocument(app, config);
 
@@ -24,11 +31,11 @@ async function bootstrap() {
     ],
   });
 
-  SwaggerModule.setup('docs', app, document);
-
   await app.listen(process.env.PORT ?? 3000);
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+    }),
+  );
 }
 bootstrap();
