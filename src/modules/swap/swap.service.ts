@@ -1,8 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { SwapQuoteDto } from './dto/swap-quote.dto';
 import axios from 'axios'
-import { id } from 'zod/v4/locales';
 import { SwapExecuteDto } from './dto/swap-execute.dto';
 
 

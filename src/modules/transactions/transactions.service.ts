@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PaginationDto } from 'src/common/dto/pagination.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionResponseDto } from './dto/transaction-response.dto';
 
 @Injectable()

@@ -1,7 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { LedgerService } from './ledger.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 @Controller('ledger')
