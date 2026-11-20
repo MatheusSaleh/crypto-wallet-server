@@ -6,7 +6,11 @@ O objetivo do projeto é simular a **infraestrutura básica de um sistema financ
 
 Esta API é consumida pelo frontend [crypto-wallet-client](https://github.com/MatheusSaleh/crypto-wallet-client).
 
-> 📘 **Documentação interativa (Swagger) em produção:** https://nest-api-r1fz.onrender.com/docs
+> 🌐 **API em produção:** https://crypto-wallet-server-kappa.vercel.app
+>
+> 📘 **Swagger:** https://crypto-wallet-server-kappa.vercel.app/docs
+>
+> 💻 **Frontend:** https://crypto-wallet-client-pink.vercel.app
 
 ---
 
@@ -20,7 +24,7 @@ Esta API é consumida pelo frontend [crypto-wallet-client](https://github.com/Ma
 - [Regras de negócio](#regras-de-negócio)
 - [Como rodar localmente](#como-rodar-localmente)
 - [Testes](#testes)
-- [Deploy (CI/CD)](#deploy-cicd)
+- [Deploy](#deploy)
 - [Estrutura do banco de dados](#estrutura-do-banco-de-dados)
 - [Decisões técnicas](#decisões-técnicas)
 
@@ -68,9 +72,10 @@ Todos os endpoints estão documentados e podem ser testados em `/docs`.
 | **Axios** | Consumo da API da CoinGecko |
 | **Swagger** (`@nestjs/swagger`) | Documentação interativa |
 | **Jest** | Testes unitários |
-| **Docker** | Empacotamento da aplicação |
-| **GitHub Actions** | CI/CD: build da imagem e deploy automático |
-| **Render** | Hospedagem da API |
+| **Vercel** | Hospedagem da API (preset NestJS) com deploy automático a cada push |
+| **Neon** | PostgreSQL gerenciado em produção (integração da Vercel) |
+| **Docker** | Imagem da aplicação para rodar em qualquer ambiente |
+| **GitHub Actions** | Build e publicação da imagem no Docker Hub |
 
 ---
 
@@ -275,15 +280,35 @@ Os testes isolam as dependências externas: o Prisma e a CoinGecko (axios) são 
 
 ---
 
-## Deploy (CI/CD)
+## Deploy
 
-O workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml) roda a cada push no `master`:
+### Vercel (produção)
 
-1. Build da imagem Docker
-2. Push para o Docker Hub (`matheussaleh/nest-api:latest`)
-3. Disparo do deploy hook do Render
+A API roda na **Vercel** com o preset **NestJS**, conectada ao repositório: cada push no `master` gera um novo deploy de produção. O banco é um **PostgreSQL da Neon**, conectado pela integração de Storage da Vercel.
 
-> ⚠️ Em produção, configure `CORS_ORIGIN` no Render com a URL do frontend. Sem isso, apenas `http://localhost:5173` é aceito.
+No deploy, a Vercel executa o script `vercel-build`:
+
+```bash
+prisma migrate deploy && pnpm run build   # build = prisma generate && nest build
+```
+
+Ou seja, **as migrations pendentes são aplicadas automaticamente** a cada deploy. Elas usam a conexão direta da Neon (`DATABASE_URL_UNPOOLED`), configurada no [`prisma.config.ts`](prisma.config.ts), enquanto a aplicação usa a conexão com pooler (`DATABASE_URL`).
+
+Variáveis de ambiente do projeto na Vercel:
+
+| Variável | Origem |
+| --- | --- |
+| `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | Criadas pela integração da Neon |
+| `JWT_SECRET` | Definida manualmente |
+| `CORS_ORIGIN` | URL do frontend (`https://crypto-wallet-client-pink.vercel.app`) |
+
+### Imagem Docker
+
+O workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml) roda a cada push no `master`, gera a imagem com o [`Dockerfile`](Dockerfile) e publica no Docker Hub como `matheussaleh/nest-api:latest`. Para rodar a API em qualquer ambiente com Docker:
+
+```bash
+docker run -p 3000:3000   -e DATABASE_URL="postgresql://..." -e JWT_SECRET="..." -e CORS_ORIGIN="http://localhost:5173"   matheussaleh/nest-api:latest
+```
 
 ---
 
