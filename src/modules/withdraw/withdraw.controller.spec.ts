@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WithdrawController } from './withdraw.controller';
+import { WithdrawService } from './withdraw.service';
 
 describe('WithdrawController', () => {
   let controller: WithdrawController;
@@ -7,6 +8,7 @@ describe('WithdrawController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [WithdrawController],
+      providers: [{ provide: WithdrawService, useValue: {} }],
     }).compile();
 
     controller = module.get<WithdrawController>(WithdrawController);
