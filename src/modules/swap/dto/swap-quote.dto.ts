@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsNumber, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import { IsNumber, IsPositive, IsString } from "class-validator";
 
 export class SwapQuoteDto {
 
@@ -11,7 +12,10 @@ export class SwapQuoteDto {
     @ApiProperty()
     toToken: string 
 
+    // Query string chega como texto: converte para number antes de validar
+    @Type(() => Number)
     @IsNumber()
+    @IsPositive()
     @ApiProperty()
     amount: number 
 }

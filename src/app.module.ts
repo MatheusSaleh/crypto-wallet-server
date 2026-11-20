@@ -11,6 +11,8 @@ import { SwapModule } from './modules/swap/swap.module';
 import { WithdrawModule } from './modules/withdraw/withdraw.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
+import { UsersModule } from './modules/users/users.module';
+import { MarketModule } from './modules/market/market.module';
 
 @Module({
   imports: [
@@ -24,7 +26,9 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
     SwapModule,
     WithdrawModule,
     LedgerModule,
-    TransactionsModule
+    TransactionsModule,
+    UsersModule,
+    MarketModule,
   ],
   controllers: [AppController],
   providers: [AppService, {

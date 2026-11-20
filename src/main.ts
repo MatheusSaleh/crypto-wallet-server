@@ -6,6 +6,26 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Permite que o frontend (crypto-wallet-client) consuma a API.
+  // CORS_ORIGIN aceita uma lista separada por vírgulas.
+  const corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  app.enableCors({
+    origin: corsOrigins,
+    credentials: true,
+  });
+
+  // Precisa ser registrado antes do listen para valer em todas as rotas.
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
+  );
+
   const config = new DocumentBuilder()
     .setTitle('Crypto Wallet API')
     .setDescription('Documentação da API')
@@ -32,10 +52,5 @@ async function bootstrap() {
   });
 
   await app.listen(process.env.PORT ?? 3000);
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-    }),
-  );
 }
 bootstrap();
