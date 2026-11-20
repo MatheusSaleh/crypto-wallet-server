@@ -56,6 +56,15 @@ export class WebhooksService {
         },
       });
 
+      await tx.transaction.create({
+        data: {
+          userId,
+          type: 'DEPOSIT',
+          toToken: token,
+          amount: parseFloat(amount),
+        },
+      });
+
       await tx.webhookEvent.create({
         data: {
           idempotencyKey,

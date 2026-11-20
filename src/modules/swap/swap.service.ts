@@ -10,10 +10,42 @@ export class SwapService {
 
     constructor(private prisma: PrismaService) {}
 
-    private tokenMap = {
+    // Ids da CoinGecko para os criptoativos. BRL é a moeda de referência.
+    private coinGeckoIds: Record<string, string> = {
         BTC: "bitcoin",
         ETH: "ethereum",
-        BRL: "brl"
+    }
+
+    private isSupported(token: string) {
+        return token === "BRL" || token in this.coinGeckoIds;
+    }
+
+    // Retorna quantos "toToken" vale 1 "fromToken", cotando ambos em BRL.
+    private async getPrice(fromToken: string, toToken: string): Promise<number> {
+        const ids = [fromToken, toToken]
+            .filter(token => token !== "BRL")
+            .map(token => this.coinGeckoIds[token]);
+
+        const response = await axios.get(
+            `https://api.coingecko.com/api/v3/simple/price`,
+            {
+                params: {
+                    ids: ids.join(","),
+                    vs_currencies: "brl"
+                }
+            }
+        );
+
+        const priceInBrl = (token: string): number => {
+            if (token === "BRL") return 1;
+            const value = response.data?.[this.coinGeckoIds[token]]?.brl;
+            if (typeof value !== "number") {
+                throw new BadRequestException(`Cotação indisponível para ${token}`);
+            }
+            return value;
+        };
+
+        return priceInBrl(fromToken) / priceInBrl(toToken);
     }
 
     async getQuote(data: SwapQuoteDto) {
@@ -24,20 +56,11 @@ export class SwapService {
             throw new BadRequestException("Tokens devem ser diferentes");
         }
 
-        const from = this.tokenMap[fromToken];
-        const to = this.tokenMap[toToken];
+        if (!this.isSupported(fromToken) || !this.isSupported(toToken)) {
+            throw new BadRequestException("Token não suportado");
+        }
 
-        const response = await axios.get(
-            `https://api.coingecko.com/api/v3/simple/price`,
-            {
-                params: {
-                    ids: from, 
-                    vs_currencies: to
-                }
-            }
-        );
-
-        const price = response.data[from][to]
+        const price = await this.getPrice(fromToken, toToken);
 
         const destinationAmount = amount * price;
 
@@ -86,8 +109,13 @@ export class SwapService {
                 throw new BadRequestException("Saldo Inválido");
             }
 
+            // quote.amount já é líquido (bruto - taxa). No ledger registramos
+            // a entrada bruta e depois a taxa, para que a soma bata com o saldo final.
+            const grossAmount = quote.amount + quote.fee;
+
             const newFromBalance = fromBalance.amount - amount;
-            const newToBalance = toBalance.amount + quote.amount;
+            const balanceAfterSwapIn = toBalance.amount + grossAmount;
+            const newToBalance = balanceAfterSwapIn - quote.fee;
 
             // Debita Origem
             await tx.balance.update({
@@ -95,7 +123,7 @@ export class SwapService {
                 data: { amount: newFromBalance }
             })
 
-            // Credita destino
+            // Credita destino (valor líquido)
             await tx.balance.update({
                 where: { id: toBalance.id },
                 data: { amount: newToBalance}
@@ -119,9 +147,9 @@ export class SwapService {
                     walletId: wallet.id,
                     type: "SWAP_IN",
                     token: toToken,
-                    amount: quote.amount,
+                    amount: grossAmount,
                     previousBalance: toBalance.amount,
-                    newBalance: newToBalance
+                    newBalance: balanceAfterSwapIn
                 }
             })
 
@@ -132,8 +160,20 @@ export class SwapService {
                     type: "SWAP_FEE",
                     token: toToken,
                     amount: -quote.fee,
-                    previousBalance: newToBalance,
-                    newBalance: newToBalance - quote.fee
+                    previousBalance: balanceAfterSwapIn,
+                    newBalance: newToBalance
+                }
+            })
+
+            // Registra a operação no histórico resumido
+            await tx.transaction.create({
+                data: {
+                    userId,
+                    type: "SWAP",
+                    fromToken,
+                    toToken,
+                    amount,
+                    fee: quote.fee
                 }
             })
 
