@@ -1,201 +1,346 @@
-# Aplicação de Carteira Digital
+# Crypto Wallet — API
 
-Backend de uma **carteira digital de tokens** desenvolvido com **NestJS, Prisma e PostgreSQL**.
-A aplicação permite:
+Backend de uma **carteira digital de criptoativos** desenvolvido com **NestJS, Prisma e PostgreSQL**.
 
-- Cadastro e autenticação de usuários
-- Gerenciamento de carteira
-- Controle de saldo de tokens
-- Depósitos via webhook
-- Conversão de tokens (swap)
-- Saques
-- Histórico contábil completo (Ledger)
-- Histórico de transações
+O objetivo do projeto é simular a **infraestrutura básica de um sistema financeiro de tokens**: cada usuário tem uma carteira com saldos em **BRL, BTC e ETH**, pode depositar, sacar e converter entre moedas com **cotação real da CoinGecko**, e todas as movimentações ficam registradas em um **livro-razão (ledger)** auditável.
 
-O objetivo do projeto é simular a **infraestrutura básica de um sistema financeiro de tokens**, mantendo **consistência de saldo e rastreabilidade das operações**.
+Esta API é consumida pelo frontend [crypto-wallet-client](https://github.com/MatheusSaleh/crypto-wallet-client).
+
+> 📘 **Documentação interativa (Swagger) em produção:** https://nest-api-r1fz.onrender.com/docs
 
 ---
 
-# Tecnologias Utilizadas
+## Sumário
 
-- **NestJS** → Framework backend Node.js estruturado
-- **Prisma ORM** → Mapeamento e acesso ao banco de dados
-- **PostgreSQL** → Banco relacional
-- **JWT** → Autenticação baseada em token
-- **CoinGecko API** → Cotação real de tokens
-- **Docker** → Esta API Executa por meio de uma imagem docker, facilitando o processo de deploy
-- **Render** → Plataforma para Deploy da API
-- **Github Actions** → Ferramenta de CI/CD utilizada para automatizar o processo de deploy
-- **Swagger** → Conjunto de ferramentas que permite documentar e consumir APIs RESTful, facilitando a visualização interativa da API
+- [Prints](#prints)
+- [Funcionalidades](#funcionalidades)
+- [Tecnologias](#tecnologias)
+- [Arquitetura](#arquitetura)
+- [Endpoints](#endpoints)
+- [Regras de negócio](#regras-de-negócio)
+- [Como rodar localmente](#como-rodar-localmente)
+- [Testes](#testes)
+- [Deploy (CI/CD)](#deploy-cicd)
+- [Estrutura do banco de dados](#estrutura-do-banco-de-dados)
+- [Decisões técnicas](#decisões-técnicas)
+
 ---
-# Como rodar o projeto
 
-### Foi realizado o deploy desta API através do Render sob a seguinte URL: 
+## Prints
 
-https://nest-api-r1fz.onrender.com/docs
+### Documentação Swagger
 
-# Como rodar o projeto localmente
+Todos os endpoints estão documentados e podem ser testados em `/docs`.
 
-## 1. Clonar o repositório
+![Swagger](docs/screenshots/swagger.jpg)
+
+### Frontend consumindo a API
+
+| Dashboard | Conversão de moedas |
+| --- | --- |
+| ![Home](docs/screenshots/home.jpg) | ![Conversão](docs/screenshots/conversao.jpg) |
+
+---
+
+## Funcionalidades
+
+- **Autenticação JWT** com access token (15 min) e refresh token (7 dias)
+- **Carteira automática**: ao se cadastrar, o usuário recebe uma carteira com saldo zerado em BRL, BTC e ETH
+- **Depósitos via webhook**, com **chave de idempotência** para impedir depósitos duplicados
+- **Saques** com validação de saldo
+- **Conversão (swap)** entre BRL, BTC e ETH com cotação em tempo real e taxa de 1,5%
+- **Ledger contábil**: cada movimentação registra saldo anterior e saldo posterior
+- **Histórico de transações** (visão resumida das operações)
+- **Cotações de mercado**: 12 moedas fiduciárias e 12 criptomoedas em BRL, com cache de 60 s
+- **Operações atômicas**: toda movimentação de saldo roda dentro de uma transação do banco
+
+---
+
+## Tecnologias
+
+| Tecnologia | Uso |
+| --- | --- |
+| **NestJS 11** | Framework backend modular, com injeção de dependências |
+| **Prisma 7** + adapter `pg` | ORM e migrations |
+| **PostgreSQL** | Banco relacional |
+| **Passport + JWT** | Autenticação baseada em token |
+| **class-validator / class-transformer** | Validação e conversão dos DTOs |
+| **Axios** | Consumo da API da CoinGecko |
+| **Swagger** (`@nestjs/swagger`) | Documentação interativa |
+| **Jest** | Testes unitários |
+| **Docker** | Empacotamento da aplicação |
+| **GitHub Actions** | CI/CD: build da imagem e deploy automático |
+| **Render** | Hospedagem da API |
+
+---
+
+## Arquitetura
+
+Cada domínio é um módulo NestJS independente, com controller (HTTP), service (regra de negócio) e DTOs (contrato de entrada e saída).
+
+```plaintext
+src
+ ├── main.ts                    # Bootstrap: CORS, ValidationPipe e Swagger
+ ├── app.module.ts              # Módulo raiz e guard JWT global
+ ├── common/dto                 # DTOs compartilhados (paginação)
+ ├── prisma                     # PrismaService (conexão com o Postgres)
+ └── modules
+      ├── auth                  # Cadastro, login, refresh, guard e estratégia JWT
+      ├── users                 # Dados do usuário autenticado
+      ├── wallet                # Saldos da carteira
+      ├── webhooks              # Depósito via webhook (idempotente)
+      ├── withdraw              # Saque
+      ├── swap                  # Cotação e conversão entre moedas
+      ├── ledger                # Livro-razão paginado
+      ├── transactions          # Histórico resumido paginado
+      └── market                # Cotações para o letreiro (cache em memória)
+```
+
+**Autenticação global:** o `JwtGuard` é registrado como `APP_GUARD`, então **todas as rotas exigem token por padrão**. Rotas públicas são marcadas explicitamente com o decorator `@Public()`.
+
+---
+
+## Endpoints
+
+🔒 = exige `Authorization: Bearer <accessToken>`
+
+| Método | Rota | Auth | Descrição |
+| --- | --- | :---: | --- |
+| `POST` | `/auth/register` | | Cadastra o usuário e cria a carteira. Retorna `accessToken` e `refreshToken` |
+| `POST` | `/auth/login` | | Autentica e retorna os tokens |
+| `POST` | `/auth/refresh` | | Gera novos tokens a partir do `refreshToken` |
+| `GET` | `/users/me` | 🔒 | Dados do usuário autenticado (`id`, `email`, `createdAt`) |
+| `GET` | `/wallet/balance` | 🔒 | Saldo de cada token da carteira |
+| `POST` | `/webhooks/deposit` | 🔒 | Depósito (`userId`, `token`, `amount`, `idempotencyKey`) |
+| `POST` | `/withdraw` | 🔒 | Saque (`token`, `amount`) |
+| `GET` | `/swap/quote` | 🔒 | Cotação (`fromToken`, `toToken`, `amount`): preço, valor líquido e taxa |
+| `POST` | `/swap` | 🔒 | Executa a conversão (`fromToken`, `toToken`, `amount`) |
+| `GET` | `/ledger?page=1&limit=10` | 🔒 | Livro-razão paginado, do mais recente para o mais antigo |
+| `GET` | `/transactions?page=1&limit=10` | 🔒 | Histórico resumido de operações |
+| `GET` | `/market/ticker` | | Cotações de moedas e criptomoedas em BRL (cache de 60 s) |
+
+<details>
+<summary>Exemplo: fluxo completo com <code>curl</code></summary>
+
+```bash
+# 1. Cadastro (já retorna os tokens)
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"teste@teste.com","password":"123456"}'
+
+TOKEN="<accessToken retornado>"
+
+# 2. Dados do usuário (para obter o id)
+curl http://localhost:3000/users/me -H "Authorization: Bearer $TOKEN"
+
+# 3. Depósito de R$ 1.000
+curl -X POST http://localhost:3000/webhooks/deposit \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"userId":"<id>","token":"BRL","amount":"1000","idempotencyKey":"deposito-001"}'
+
+# 4. Cotação e conversão de R$ 500 em BTC
+curl "http://localhost:3000/swap/quote?fromToken=BRL&toToken=BTC&amount=500" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -X POST http://localhost:3000/swap \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"fromToken":"BRL","toToken":"BTC","amount":500}'
+
+# 5. Saldo e extrato
+curl http://localhost:3000/wallet/balance -H "Authorization: Bearer $TOKEN"
+curl "http://localhost:3000/ledger?page=1&limit=10" -H "Authorization: Bearer $TOKEN"
+```
+
+</details>
+
+---
+
+## Regras de negócio
+
+### Cotação
+
+A CoinGecko não oferece todos os pares diretamente (por exemplo, `brl` não é um ativo e `bitcoin` não é uma moeda de cotação). Por isso, **os dois tokens são cotados em BRL** e o preço do par é a razão entre eles:
+
+```
+preço(from → to) = preçoEmBRL(from) / preçoEmBRL(to)      (BRL = 1)
+```
+
+Isso permite qualquer combinação: BTC→BRL, BRL→ETH, ETH→BTC etc.
+
+### Taxa de conversão
+
+A plataforma cobra **1,5% sobre o valor convertido**:
+
+```
+bruto   = quantidade × preço
+taxa    = bruto × 1,5%
+líquido = bruto − taxa      ← valor creditado na carteira
+```
+
+### Lançamentos no ledger
+
+Cada operação gera lançamentos com `previousBalance` e `newBalance`, de modo que a sequência sempre bate com o saldo real:
+
+| Operação | Lançamentos |
+| --- | --- |
+| Depósito | `DEPOSIT` (+) |
+| Saque | `WITHDRAWAL` (−) |
+| Conversão | `SWAP_OUT` (− origem) → `SWAP_IN` (+ valor bruto no destino) → `SWAP_FEE` (− taxa no destino) |
+
+Exemplo: com R$ 500 de saldo, ao converter 1 BTC a R$ 100.000:
+`SWAP_IN` +100.000 (500 → 100.500) e depois `SWAP_FEE` −1.500 (100.500 → **99.000**, o saldo final).
+
+### Idempotência de depósitos
+
+Cada depósito traz uma `idempotencyKey`. Se a mesma chave chegar de novo, o depósito é rejeitado, o que evita crédito em dobro quando o provedor reenvia o webhook.
+
+### Cache de cotações de mercado
+
+`/market/ticker` consulta a CoinGecko no máximo uma vez a cada 60 s, por mais clientes que estejam conectados. Requisições simultâneas compartilham a mesma chamada. Se a CoinGecko falhar (por exemplo, por limite de requisições), a API devolve o último valor conhecido.
+
+---
+
+## Como rodar localmente
+
+### Pré-requisitos
+
+- **Node.js 20+** e **pnpm**
+- **PostgreSQL**: o jeito mais simples é via Docker
+
+### 1. Clonar e instalar
 
 ```bash
 git clone https://github.com/MatheusSaleh/crypto-wallet-server
 cd crypto-wallet-server
+pnpm install
 ```
 
-## 2. Instalar depêndencias
+### 2. Subir o PostgreSQL (Docker)
 
 ```bash
- pnpm install
+docker run -d --name crypto-wallet-db \
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=wallet \
+  -p 5432:5432 postgres:16
 ```
 
-## 3. Configurar Variáveis de ambiente
-Crie um arquivo .env que armazerá as credencias do banco Postgres que rodará a aplicação
-Exemplo:
+Nas próximas vezes, basta `docker start crypto-wallet-db`.
+
+### 3. Variáveis de ambiente
+
+Crie um arquivo `.env` na raiz:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/wallet"
+JWT_SECRET="troque_por_um_segredo_forte"
+CORS_ORIGIN="http://localhost:5173"
+```
+
+| Variável | Obrigatória | Descrição |
+| --- | :---: | --- |
+| `DATABASE_URL` | ✅ | String de conexão do PostgreSQL |
+| `JWT_SECRET` | ✅ | Segredo usado para assinar os tokens JWT |
+| `CORS_ORIGIN` | | Origens liberadas no CORS, separadas por vírgula. Padrão: `http://localhost:5173` |
+| `PORT` | | Porta da API. Padrão: `3000` |
+
+### 4. Migrations e Prisma Client
+
 ```bash
- DATABASE_URL="postgresql://postgres:postgres@localhost:5432/wallet"
- JWT_SECRET="secret_exemplo"
+pnpm prisma migrate dev
+pnpm prisma generate
 ```
 
-## 4. Executar as migrations do prisma
+### 5. Rodar
+
 ```bash
-    pnpm prisma migrate dev
+pnpm run start:dev    # modo desenvolvimento (recarrega ao salvar)
+pnpm run start        # execução simples
+pnpm run start:prod   # após pnpm run build
 ```
 
-## 5. Gerar o client do Prisma
+A API sobe em **http://localhost:3000** e o Swagger em **http://localhost:3000/docs**.
+
+---
+
+## Testes
+
 ```bash
-    pnpm prisma generate
+pnpm test          # testes unitários
+pnpm test:cov      # com cobertura
 ```
 
-## 6. Rodar a aplicação
-```bash
-    pnpm run start
-```
+Os testes isolam as dependências externas: o Prisma e a CoinGecko (axios) são substituídos por mocks. Destaques:
 
-## 7. Execução
-A API se iniciará em localhost:3000
+- **SwapService**: cotação nos três sentidos (cripto→BRL, BRL→cripto, cripto→cripto), rejeição de tokens inválidos e de saldo insuficiente, e **consistência do ledger** após o swap
+- **MarketService**: conversão de moedas fiduciárias para BRL, uso do cache, fallback para o último valor e erro 503 sem cache
 
-# Decisões Técnicas
+---
 
-## NestJS
-Optou-se por usar o NestJS por oferecer uma arquitetura modular, separação clara entre Controllers, Services e DTOs e suporte nativo a injeção de dependências
+## Deploy (CI/CD)
 
-## PrismaORM
-O Prisma foi escolhido ao invés de outras ORMs pois possui tipagem forte com Typescript, migrations simples, client gerado automaticamente e uma excelente integração com o NestJS.
+O workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml) roda a cada push no `master`:
 
+1. Build da imagem Docker
+2. Push para o Docker Hub (`matheussaleh/nest-api:latest`)
+3. Disparo do deploy hook do Render
 
+> ⚠️ Em produção, configure `CORS_ORIGIN` no Render com a URL do frontend. Sem isso, apenas `http://localhost:5173` é aceito.
 
-## Estrutura do Banco de Dados
+---
 
-### **1. User**
+## Estrutura do banco de dados
+
+### 1. User
 Representa o **usuário da plataforma**.
 
-- **id**: UUID, chave primária.
-- **email**: único, impede duplicidade.
-- **password**: senha do usuário.
-- **wallet**: relação opcional 1:1 com `Wallet`.
-- **createdAt**: data de criação do usuário.
+- **id**: UUID, chave primária
+- **email**: único, impede duplicidade
+- **password**: hash bcrypt da senha
+- **wallet**: relação 1:1 com `Wallet`
+- **createdAt**: data de criação
 
-Regras: 
-- Cada usuário pode possuir **apenas uma carteira**.
-- A criação da carteira é feita após o registro do usuário.
+Cada usuário possui **apenas uma carteira**, criada junto com o cadastro.
 
+### 2. Wallet
+**Container financeiro** do usuário.
 
----
+- **id**: UUID, chave primária
+- **userId**: único, referência a `User`
+- **createdAt**: data de criação
 
-### **2. Wallet**
-Representa a **carteira digital do usuário**, onde ficam armazenados os tokens.
+### 3. Balance
+**Saldo de cada token** dentro da carteira.
 
+- **id**: UUID, chave primária
+- **walletId**: referência à carteira
+- **token**: `BRL`, `BTC` ou `ETH`
+- **amount**: quantidade, padrão 0
 
-- **id**: UUID, chave primária.
-- **userId**: único, referência a `User`.
-- **createdAt**: data de criação da carteira.
+Uma carteira não pode ter dois saldos do mesmo token, o que é garantido pela constraint `@@unique([walletId, token])`.
 
-Relacionamentos:
+### 4. LedgerEntry
+**Registro contábil** de cada movimentação, para auditoria.
 
-- **1:1 com User**
-- **1:N com Balance**
-- **1:N com LedgerEntry**
+- **type**: `DEPOSIT`, `WITHDRAWAL`, `SWAP_IN`, `SWAP_OUT` ou `SWAP_FEE`
+- **token**, **amount** (positivo = crédito, negativo = débito)
+- **previousBalance / newBalance**: saldo antes e depois do lançamento
+- **createdAt**
 
-Responsabilidade:
+### 5. Transaction
+**Visão resumida** das operações do usuário. O ledger é detalhado e contábil; esta tabela serve para consultar o histórico de operações.
 
-A carteira funciona como **container financeiro** do usuário.
+- **type**: `DEPOSIT`, `WITHDRAWAL` ou `SWAP`
+- **fromToken / toToken**: token de origem e de destino
+- **amount**: valor da operação
+- **fee**: taxa cobrada (conversões)
+- **createdAt**
 
----
+### 6. WebhookEvent
+Controle de **idempotência** dos depósitos.
 
-### **3. Balance**
-Controla o **saldo de cada token dentro da carteira**.
+- **idempotencyKey**: identificador único da operação
+- **createdAt**: data do processamento
 
-
-
-- **id**: UUID, chave primária.
-- **walletId**: referência à carteira.
-- **token**: identifica o tipo de token.
-- **amount**: quantidade do token, padrão 0.
-
-- **Único por token em cada carteira**.
-Regra importante:
-
-Uma carteira não pode ter dois saldos do mesmo token.
-Isso é garantido pela constraint:
-```bash
-     @@unique([walletId, token])
-```
-
----
-
-### **4. LedgerEntry**
-Tabela responsável pelo registro contábil das movimentações da carteira.
-
-- **id**: UUID, chave primária.
-- **walletId**: referência à carteira.
-- **type**: tipo da movimentação (DEPOSIT, WITHDRAWAL, SWAP_IN, SWAP_OUT).
-- **token**: token movimentado.
-- **amount**: valor da transação.
-- **previousBalance / newBalance**: histórico do saldo antes e depois da operação.
-- **createdAt**: data da movimentação.
-
-> Mantém o **histórico completo de todas as transações** para auditoria, o Ledger é um controle contabil detalhado já Tranasactions representa uma visão resumida das operações
-
----
-
-
-### **5. Transaction**
-Tabela responsável pelo registro contábil das movimentações da carteira.
-Representa uma visão resumida das operações realizadas pelo usuário.
-
-Diferente do ledger, que é contábil e detalhado, essa tabela serve para consultar histórico de operações.
-
-- **id**: UUID, chave primária.
-- **userId**: usuário que realizou a operação.
-- **type**: tipo da movimentação (DEPOSIT, WITHDRAWAL, SWAP_IN, SWAP_OUT).
-- **fromToken**: token de origem (ex: BTC)
-- **toToken**: token de destino (ex: BRL)
-- **amount**: valor da operação.
-- **fee**: taxa cobrada 
-- **createdAt**: data da movimentação.
-
----
-
-### **6. WebhookEvent**
-Tabela utilizada para controle de idempotência de webhooks de depósito.
-
-Quando um serviço externo envia um depósito, ele inclui uma idempotencyKey.
-
-- **id**: UUID, chave primária.
-- **idempotencyKey**: identificador único da operação.
-- **type**: data do processamento.
-
-Se um webhook com a mesma idempotencyKey chegar novamente, ele será ignorado, evitando depósitos duplicados.
-
----
-
-### **Relacionamentos**
-- **User ↔ Wallet**: 1:1  
-- **Wallet ↔ Balance**: 1:N  
-- **Wallet ↔ LedgerEntry**: 1:N  
-- **User ↔ Transaction**: 1:N  
----
+### Relacionamentos
 
 ```mermaid
 erDiagram
@@ -251,3 +396,23 @@ erDiagram
     WALLET ||--o{ BALANCE : possui
     WALLET ||--o{ LEDGERENTRY : registra
     USER ||--o{ TRANSACTION : realiza
+```
+
+---
+
+## Decisões técnicas
+
+### NestJS
+Arquitetura modular, separação clara entre controllers, services e DTOs, e suporte nativo a injeção de dependências, o que facilita os testes com mocks.
+
+### Prisma ORM
+Tipagem forte com TypeScript, migrations simples, client gerado automaticamente e boa integração com o NestJS. As operações financeiras usam `prisma.$transaction` para garantir atomicidade: ou todos os lançamentos são gravados, ou nenhum.
+
+### Ledger + Transaction
+O **ledger** é a fonte da verdade contábil: cada linha registra o saldo antes e depois, permitindo reconstruir e auditar qualquer saldo. A tabela **Transaction** é uma visão simplificada, voltada à consulta do histórico pelo usuário.
+
+### Guard JWT global
+Proteger todas as rotas por padrão e liberar só as necessárias com `@Public()` evita expor um endpoint por esquecimento.
+
+### Cotação via BRL e cache
+Cotar tudo em BRL resolve pares que a CoinGecko não suporta diretamente. O cache em memória das cotações de mercado protege o limite da API gratuita, que também é usada pelas conversões.
